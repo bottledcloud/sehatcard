@@ -1,0 +1,14 @@
+# deps / build
+node_modules/
+*.tgz
+
+# os / editor
+.DS_Store
+*.log
+
+# Claude Code local (committed: .claude/settings.json; ignored: local overrides)
+.claude/settings.local.json
+
+# local patient data exports — never commit real records
+sehatcard-backup-*.json
+fhir-bundle-*.json
