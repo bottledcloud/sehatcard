@@ -121,6 +121,43 @@
   .qr-warn{color:var(--danger);font-weight:600;margin-top:6px}
   .gen{font-size:10.5px;color:#9aa7ab;text-align:center;padding:9px;border-top:1px solid var(--line)}
 
+  /* ===== Lab reports ===== */
+  .collapsible-h{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+  .collapsible-h .chevron{transition:.2s;font-size:13px;color:var(--muted)}
+  .collapsible-h.open .chevron{transform:rotate(180deg)}
+  .collapsible-body{display:none}
+  .collapsible-body.open{display:block}
+  .lab-count{background:var(--primary-tint);color:var(--primary-deep);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;margin-left:8px}
+  .lab-report{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .lab-report-head{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}
+  .lab-report-head .lr-date{font-weight:700;font-size:13.5px}
+  .lab-report-head .lr-lab{font-size:12px;color:var(--muted)}
+  .lab-report-head .lr-flags{display:flex;gap:4px}
+  .lr-flag{font-size:10px;font-weight:700;border-radius:5px;padding:2px 6px}
+  .lr-flag.high{background:var(--danger-soft);color:var(--danger)}
+  .lr-flag.low{background:var(--amber-soft);color:#7a4f10}
+  .lr-flag.ok{background:#E3F2EC;color:#1d6b4c}
+  .lab-report-body{display:none;margin-top:10px;border-top:1px solid var(--line-soft);padding-top:10px}
+  .lab-report-body.open{display:block}
+  .lr-cat{margin-bottom:10px}
+  .lr-cat:last-child{margin-bottom:0}
+  .lr-cat-h{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:5px}
+  .lr-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:3px 0;font-size:13px;border-bottom:1px solid var(--line-soft)}
+  .lr-row:last-child{border-bottom:none}
+  .lr-row .lr-name{flex:1;color:var(--ink)}
+  .lr-row .lr-val{font-weight:700;font-variant-numeric:tabular-nums}
+  .lr-row .lr-val.high{color:var(--danger)}
+  .lr-row .lr-val.low{color:var(--amber)}
+  .lr-row .lr-unit{font-size:11.5px;color:var(--muted);min-width:45px}
+  .lr-row .lr-ref{font-size:11px;color:#9aa7ab}
+  .lab-empty{color:#9aa7ab;font-size:13px;padding:10px 0;text-align:center}
+
+  .lab-import-preview{max-height:340px;overflow:auto;margin:12px 0}
+  .lip-summary{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .lip-chip{font-size:12px;font-weight:600;border-radius:7px;padding:3px 9px}
+  .lip-chip.total{background:var(--primary-tint);color:var(--primary-deep)}
+  .lip-chip.flagged{background:var(--danger-soft);color:var(--danger)}
+
   .preview-actions{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
 
   .note{font-size:12px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:14px;line-height:1.55}
@@ -297,6 +334,19 @@
         </div>
       </div>
 
+      <div class="panel panel-pad no-print" style="margin-bottom:18px">
+        <div class="collapsible-h" id="labToggle">
+          <h2 style="margin-bottom:0">Lab Reports <span class="lab-count" id="labCount">0</span></h2>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="collapsible-body" id="labBody">
+          <div style="margin-top:12px">
+            <div id="labList"></div>
+            <button class="btn-ghost" id="btnLabImport" style="margin-top:8px;width:100%">+ Import lab report</button>
+          </div>
+        </div>
+      </div>
+
       <div class="panel panel-pad saved no-print">
         <h2>Saved patients <span class="count" id="pcount">0</span></h2>
         <div class="plist" id="plist"></div>
@@ -395,6 +445,35 @@
     <div class="modal-actions">
       <button class="btn-ghost" id="passCancel">Cancel</button>
       <button class="btn-primary" id="passGo">Set &amp; save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lab import modal -->
+<div class="scrim" id="labScrim">
+  <div class="modal wide">
+    <h3>Import lab report</h3>
+    <p class="sub">Paste the lab report text below — results from the PDF, or a markdown summary. The parser will extract test names, values, units, and reference ranges.</p>
+    <div class="row">
+      <div class="field">
+        <label class="lbl" for="lab-date">Collection date</label>
+        <input type="date" id="lab-date">
+      </div>
+      <div class="field">
+        <label class="lbl" for="lab-name">Lab name <span class="opt">(optional)</span></label>
+        <input id="lab-name" placeholder="e.g. Tata 1mg Bangalore">
+      </div>
+    </div>
+    <div class="field">
+      <label class="lbl" for="lab-text">Report text</label>
+      <textarea id="lab-text" style="min-height:140px;font-size:12.5px;font-family:ui-monospace,monospace" placeholder="Paste lab report text here...&#10;&#10;Hemoglobin  15.2  g/dL  13.0-17.0&#10;SGPT  60  U/L  0-45&#10;HbA1c: 5.4 %"></textarea>
+    </div>
+    <div id="labPreview"></div>
+    <div class="err" id="labErr"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="labParseBtn">Parse</button>
+      <button class="btn-ghost" id="labCancelBtn">Cancel</button>
+      <button class="btn-primary" id="labSaveBtn" disabled>Save report</button>
     </div>
   </div>
 </div>
@@ -703,6 +782,157 @@
     if (!n) return [];
     const pool = cat ? TERMINOLOGY[cat] : [].concat(...Object.values(TERMINOLOGY));
     return pool.filter((e) => normalize(e.display).includes(n) || e.syn.some((s) => s.includes(n))).slice(0, 8).map((e) => ({ system: SCT, code: e.code, display: e.display }));
+  }
+
+  // src/labs.js
+  var CATEGORIES = {
+    diabetes: ["hba1c", "glycosylated hemoglobin", "glucose", "fasting blood sugar", "fbs", "insulin", "eag", "estimated average glucose"],
+    lipids: ["cholesterol", "triglyceride", "hdl", "ldl", "vldl", "non hdl", "non-hdl"],
+    allergy: ["ige total", "ige)", "immunoglobulin e"],
+    serology: ["dengue", "malaria", "typhoid", "widal", "plasmodium"],
+    liver: ["sgot", "sgpt", "ast", "alt", "aspartate", "alanine transaminase", "ggt", "gamma glutamyl", "alkaline phosphatase", "bilirubin", "albumin", "protein, total", "protein total", "a/g ratio", "sgot/sgpt"],
+    kidney: ["creatinine", "urea", "bun", "uric acid", "sodium", "potassium", "chloride", "egfr", "glomerular filtration", "bun/creatinine"],
+    thyroid: ["tsh", "t3", "t4", "thyroid", "free t3", "free t4"],
+    vitamins: ["vitamin d", "vitamin b12", "vitamin b9", "folate", "folic acid", "25-oh"],
+    iron: ["iron serum", "iron,", "tibc", "iron binding", "ferritin", "transferrin", "uibc", "unsaturated iron"],
+    cardiac: ["lipoprotein", "lp(a)", "apolipoprotein", "apob", "apoa", "homocysteine", "hs-crp", "high sensitivity crp", "high sensitive crp"],
+    inflammation: ["c-reactive", "crp", "esr", "erythrocyte sedimentation"],
+    cbc: ["hemoglobin", "rbc", "hct", "mcv", "mch", "mchc", "rdw", "leucocyte", "wbc", "neutrophil", "lymphocyte", "monocyte", "eosinophil", "basophil", "platelet", "mpv", "pdw"],
+    urine: ["urine", "pus cell", "epithelial", "bacteria", "cast", "crystal", "specific gravity", "ketone", "nitrite", "urobilinogen", "leucocyte esterase"],
+    hormones: ["testosterone", "psa", "prostate specific"],
+    pancreas: ["lipase", "amylase"],
+    arthritis: ["rheumatoid", "rf ", "anti-ccp"]
+  };
+  function categorize(name) {
+    const n = (name || "").toLowerCase();
+    for (const [cat, keywords] of Object.entries(CATEGORIES)) {
+      if (keywords.some((k) => n.includes(k))) return cat;
+    }
+    return "other";
+  }
+  function deriveFlag(value, refLow, refHigh) {
+    if (value == null || refLow == null && refHigh == null) return null;
+    if (refLow != null && value < refLow) return "low";
+    if (refHigh != null && value > refHigh) return "high";
+    return "normal";
+  }
+  function parseRef(s) {
+    if (!s || /^negative|^normal/i.test(s.trim())) return { refLow: null, refHigh: null };
+    let m = s.match(/^[<≤]\s*([\d.]+)/);
+    if (m) return { refLow: null, refHigh: parseFloat(m[1]) };
+    m = s.match(/^[>≥]\s*([\d.]+)/);
+    if (m) return { refLow: parseFloat(m[1]), refHigh: null };
+    m = s.match(/([\d.]+)\s*[-–—]\s*([\d.]+)/);
+    if (m) return { refLow: parseFloat(m[1]), refHigh: parseFloat(m[2]) };
+    return { refLow: null, refHigh: null };
+  }
+  function parseValue(s) {
+    const trimmed = (s || "").trim();
+    if (!trimmed) return { value: null, valueText: "" };
+    const ltm = trimmed.match(/^[<>≤≥]\s*([\d.]+)/);
+    if (ltm) return { value: parseFloat(ltm[1]), valueText: trimmed };
+    if (/^[a-zA-Z]/.test(trimmed) && !/^\d/.test(trimmed)) return { value: null, valueText: trimmed };
+    const num = parseFloat(trimmed);
+    if (!isNaN(num)) return { value: num, valueText: trimmed };
+    return { value: null, valueText: trimmed };
+  }
+  var CAT_LABELS = {
+    diabetes: "Diabetes",
+    lipids: "Lipids",
+    liver: "Liver",
+    kidney: "Kidney",
+    thyroid: "Thyroid",
+    vitamins: "Vitamins",
+    iron: "Iron Studies",
+    cardiac: "Cardiac",
+    inflammation: "Inflammation",
+    cbc: "Blood Count",
+    urine: "Urine",
+    hormones: "Hormones",
+    allergy: "Allergy",
+    serology: "Serology",
+    pancreas: "Pancreas",
+    arthritis: "Arthritis",
+    other: "Other"
+  };
+  function parseLabText(text) {
+    const results = [];
+    const seen = /* @__PURE__ */ new Set();
+    const lines2 = (text || "").split("\n");
+    for (let raw of lines2) {
+      raw = raw.trim();
+      if (!raw || raw.length < 4) continue;
+      if (/^(test name|comment|note|disclaimer|page \d|po no|customer name|age\/gender|lab visit|barcode|sample type|collected via|referred by|collection date|report date|report status|this test has been|address:|state of the art|delhi|---)/i.test(raw)) continue;
+      if (/^[#*•●\-–]/.test(raw)) continue;
+      if (/^\d+\.\s/.test(raw) && !/^\d+\.\d/.test(raw)) continue;
+      if (raw.length > 200) continue;
+      let name, resultStr, unit, refStr;
+      const mdMatch = raw.match(/^([A-Za-z][A-Za-z0-9 (),\-\/.']+?):\s*([\d.<>≤≥]+)\s*(%|[a-zA-Z/µμ^²³·\d]+)?\s*([✅↑↓⬆⬇].*)?$/);
+      if (mdMatch) {
+        name = mdMatch[1].trim();
+        resultStr = mdMatch[2];
+        unit = (mdMatch[3] || "").trim();
+        refStr = null;
+      }
+      if (!name) {
+        const parts = raw.split(/\t|\s{2,}/).map((s) => s.trim()).filter(Boolean);
+        if (parts.length >= 3) {
+          const candidateName = parts[0];
+          if (/^[A-Z ]+$/.test(candidateName) && candidateName.split(" ").length <= 3 && !/\d/.test(parts[1])) continue;
+          const { value: testVal } = parseValue(parts[1]);
+          if (testVal !== null || /^(negative|positive|normal|trace|nil|clear|absent|present)/i.test(parts[1])) {
+            name = candidateName;
+            resultStr = parts[1];
+            if (parts.length >= 4) {
+              unit = parts[2];
+              refStr = parts[3];
+              if (/\d+-\d+/.test(unit) || /^[<>]/.test(unit)) {
+                refStr = unit;
+                unit = "";
+              }
+            } else if (parts.length === 3) {
+              if (/\d/.test(parts[2]) && !/^[a-zA-Z/%]+$/.test(parts[2])) {
+                refStr = parts[2];
+                unit = "";
+              } else {
+                unit = parts[2];
+              }
+            }
+          }
+        }
+      }
+      if (!name) continue;
+      name = name.replace(/\s+/g, " ").trim();
+      const key = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (seen.has(key)) continue;
+      if (/^(interpretation|reference|criteria|category|gfr|consider therapy|risk group|extreme risk|very high|high risk|moderate risk|low risk|stage|tanner|pregnancy|comment)/i.test(name)) continue;
+      seen.add(key);
+      const { value, valueText } = parseValue(resultStr);
+      const { refLow, refHigh } = parseRef(refStr || "");
+      const flag = deriveFlag(value, refLow, refHigh);
+      const category = categorize(name);
+      if (value === null && !valueText) continue;
+      results.push({
+        name,
+        category,
+        value,
+        valueText: valueText || String(resultStr || ""),
+        unit: (unit || "").replace(/\s+/g, ""),
+        refLow,
+        refHigh,
+        flag
+      });
+    }
+    return results;
+  }
+  function createLabReport(date, lab, results, source) {
+    return {
+      id: "lr_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      date: date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+      lab: lab || "",
+      results: results || [],
+      source: source || "manual"
+    };
   }
 
   // src/qr.js
@@ -2392,6 +2622,7 @@
   var cryptoSalt = null;
   var lang = "en";
   var coding = { allergy: {}, cond: {}, meds: {}, hist: {} };
+  var labs = [];
   var F = {
     name: $("f-name"),
     age: $("f-age"),
@@ -2466,7 +2697,8 @@
       hist: F.hist.value.trim(),
       ecname: F.ecname.value.trim(),
       ecphone: F.ecphone.value.trim(),
-      codes: coding
+      codes: coding,
+      labs
     };
   }
   function write(p) {
@@ -2483,6 +2715,8 @@
     F.ecname.value = p.ecname || "";
     F.ecphone.value = p.ecphone || "";
     coding = p.codes && typeof p.codes === "object" ? { allergy: p.codes.allergy || {}, cond: p.codes.cond || {}, meds: p.codes.meds || {}, hist: p.codes.hist || {} } : { allergy: {}, cond: {}, meds: {}, hist: {} };
+    labs = Array.isArray(p.labs) ? p.labs : [];
+    renderLabs();
   }
   function qrPayload(p) {
     const o = { v: 1, n: p.name, ag: p.age, sx: p.sex, bg: p.blood };
@@ -2658,6 +2892,135 @@
     const { done, total } = codedCount();
     toast(done + " of " + total + " coded");
   };
+  var parsedLabResults = null;
+  $("labToggle").onclick = () => {
+    $("labToggle").classList.toggle("open");
+    $("labBody").classList.toggle("open");
+  };
+  function renderLabs() {
+    const wrap = $("labList");
+    $("labCount").textContent = labs.length;
+    if (!labs.length) {
+      wrap.innerHTML = '<div class="lab-empty">No lab reports yet. Import one to start tracking.</div>';
+      return;
+    }
+    wrap.innerHTML = "";
+    const sorted = [...labs].sort((a, b) => b.date.localeCompare(a.date));
+    sorted.forEach((report) => {
+      const div = document.createElement("div");
+      div.className = "lab-report";
+      const highCount = report.results.filter((r) => r.flag === "high").length;
+      const lowCount = report.results.filter((r) => r.flag === "low").length;
+      const flags = [];
+      if (highCount) flags.push('<span class="lr-flag high">' + highCount + " high</span>");
+      if (lowCount) flags.push('<span class="lr-flag low">' + lowCount + " low</span>");
+      if (!highCount && !lowCount) flags.push('<span class="lr-flag ok">all normal</span>');
+      div.innerHTML = '<div class="lab-report-head"><div><span class="lr-date">' + esc(report.date) + '</span> <span class="lr-lab">' + esc(report.lab || "") + '</span></div><div class="lr-flags">' + flags.join("") + '</div></div><div class="lab-report-body" id="lrb-' + esc(report.id) + '"></div>';
+      div.querySelector(".lab-report-head").onclick = () => {
+        const body = div.querySelector(".lab-report-body");
+        body.classList.toggle("open");
+        if (body.classList.contains("open") && !body.dataset.rendered) {
+          body.dataset.rendered = "1";
+          renderLabReport(body, report);
+        }
+      };
+      wrap.appendChild(div);
+    });
+  }
+  function renderLabReport(container, report) {
+    const groups = {};
+    report.results.forEach((r) => {
+      const cat = r.category || "other";
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(r);
+    });
+    const catOrder = ["diabetes", "lipids", "liver", "kidney", "thyroid", "cardiac", "inflammation", "cbc", "vitamins", "iron", "hormones", "allergy", "serology", "pancreas", "arthritis", "urine", "other"];
+    let html = "";
+    catOrder.forEach((cat) => {
+      if (!groups[cat]) return;
+      html += '<div class="lr-cat"><div class="lr-cat-h">' + esc(CAT_LABELS[cat] || cat) + "</div>";
+      groups[cat].forEach((r) => {
+        const flagCls = r.flag === "high" ? " high" : r.flag === "low" ? " low" : "";
+        const refStr = r.refLow != null && r.refHigh != null ? r.refLow + "–" + r.refHigh : r.refHigh != null ? "<" + r.refHigh : r.refLow != null ? ">" + r.refLow : "";
+        html += '<div class="lr-row"><span class="lr-name">' + esc(r.name) + '</span><span class="lr-val' + flagCls + '">' + esc(r.valueText) + '</span><span class="lr-unit">' + esc(r.unit || "") + '</span><span class="lr-ref">' + esc(refStr) + "</span></div>";
+      });
+      html += "</div>";
+    });
+    html += '<div style="margin-top:10px"><button class="mini btn-danger" data-del="' + report.id + '">Delete report</button></div>';
+    container.innerHTML = html;
+    container.querySelector("[data-del]").onclick = () => {
+      const i = labs.findIndex((l) => l.id === report.id);
+      if (i > -1) {
+        labs.splice(i, 1);
+        renderLabs();
+        toast("Report deleted");
+      }
+    };
+  }
+  $("btnLabImport").onclick = () => {
+    $("lab-date").value = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    $("lab-name").value = "";
+    $("lab-text").value = "";
+    $("labPreview").innerHTML = "";
+    $("labErr").textContent = "";
+    $("labSaveBtn").disabled = true;
+    parsedLabResults = null;
+    $("labScrim").classList.add("show");
+    $("lab-text").focus();
+  };
+  $("labCancelBtn").onclick = () => {
+    $("labScrim").classList.remove("show");
+    parsedLabResults = null;
+  };
+  $("labParseBtn").onclick = () => {
+    const text = $("lab-text").value.trim();
+    if (!text) {
+      $("labErr").textContent = "Paste some report text first.";
+      return;
+    }
+    parsedLabResults = parseLabText(text);
+    if (!parsedLabResults.length) {
+      $("labErr").textContent = "No test results found. Check the format.";
+      $("labSaveBtn").disabled = true;
+      return;
+    }
+    $("labErr").textContent = "";
+    const highCount = parsedLabResults.filter((r) => r.flag === "high").length;
+    const lowCount = parsedLabResults.filter((r) => r.flag === "low").length;
+    let html = '<div class="lip-summary"><span class="lip-chip total">' + parsedLabResults.length + " results parsed</span>";
+    if (highCount) html += '<span class="lip-chip flagged">' + highCount + " high</span>";
+    if (lowCount) html += '<span class="lip-chip flagged">' + lowCount + " low</span>";
+    html += '</div><div class="lab-import-preview">';
+    const groups = {};
+    parsedLabResults.forEach((r) => {
+      const c = r.category || "other";
+      if (!groups[c]) groups[c] = [];
+      groups[c].push(r);
+    });
+    Object.keys(groups).forEach((cat) => {
+      html += '<div class="lr-cat"><div class="lr-cat-h">' + esc(CAT_LABELS[cat] || cat) + "</div>";
+      groups[cat].forEach((r) => {
+        const flagCls = r.flag === "high" ? " high" : r.flag === "low" ? " low" : "";
+        const refStr = r.refLow != null && r.refHigh != null ? r.refLow + "–" + r.refHigh : r.refHigh != null ? "<" + r.refHigh : r.refLow != null ? ">" + r.refLow : "";
+        html += '<div class="lr-row"><span class="lr-name">' + esc(r.name) + '</span><span class="lr-val' + flagCls + '">' + esc(r.valueText) + '</span><span class="lr-unit">' + esc(r.unit || "") + '</span><span class="lr-ref">' + esc(refStr) + "</span></div>";
+      });
+      html += "</div>";
+    });
+    html += "</div>";
+    $("labPreview").innerHTML = html;
+    $("labSaveBtn").disabled = false;
+  };
+  $("labSaveBtn").onclick = () => {
+    if (!parsedLabResults || !parsedLabResults.length) return;
+    const report = createLabReport($("lab-date").value, $("lab-name").value.trim(), parsedLabResults, "parsed");
+    labs.push(report);
+    renderLabs();
+    $("labScrim").classList.remove("show");
+    parsedLabResults = null;
+    $("labToggle").classList.add("open");
+    $("labBody").classList.add("open");
+    toast(report.results.length + " results saved");
+  };
   function render() {
     const p = read(), t = I18N[lang];
     $("t-title").textContent = t.title;
@@ -2790,6 +3153,7 @@
   };
   $("btnNew").onclick = () => {
     coding = { allergy: {}, cond: {}, meds: {}, hist: {} };
+    labs = [];
     write({});
     render();
     toast("Cleared");

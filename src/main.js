@@ -2,6 +2,7 @@
 import { buildFHIR, validateFHIR } from "./fhir.js";
 import { deriveKey, encryptJSON, decryptStore, ub64 } from "./crypto.js";
 import { autoMatch, searchTerms } from "./terminology.js";
+import { parseLabText, createLabReport, CAT_LABELS } from "./labs.js";
 import qrcode from "./qr.js";
 
   const $ = id => document.getElementById(id);
@@ -13,6 +14,7 @@ import qrcode from "./qr.js";
   let lang="en";
   // coding state for the patient currently in the form: cat -> {itemText -> {system,code,display}}
   let coding={allergy:{},cond:{},meds:{},hist:{}};
+  let labs=[];  // current patient's lab reports
 
   const F={name:$("f-name"),age:$("f-age"),sex:$("f-sex"),blood:$("f-blood"),phone:$("f-phone"),
     abha:$("f-abha"),allergy:$("f-allergy"),cond:$("f-cond"),meds:$("f-meds"),hist:$("f-hist"),
@@ -40,13 +42,15 @@ import qrcode from "./qr.js";
     name:F.name.value.trim(),age:F.age.value.trim(),sex:F.sex.value,blood:F.blood.value,
     phone:F.phone.value.trim(),abha:F.abha.value.trim(),allergy:lines(F.allergy.value),
     cond:lines(F.cond.value),meds:lines(F.meds.value),hist:F.hist.value.trim(),
-    ecname:F.ecname.value.trim(),ecphone:F.ecphone.value.trim(),codes:coding};}
+    ecname:F.ecname.value.trim(),ecphone:F.ecphone.value.trim(),codes:coding,labs:labs};}
   function write(p){
     F.name.value=p.name||"";F.age.value=p.age||"";F.sex.value=p.sex||"";F.blood.value=p.blood||"";
     F.phone.value=p.phone||"";F.abha.value=p.abha||"";F.allergy.value=(p.allergy||[]).join("\n");
     F.cond.value=(p.cond||[]).join("\n");F.meds.value=(p.meds||[]).join("\n");F.hist.value=p.hist||"";
     F.ecname.value=p.ecname||"";F.ecphone.value=p.ecphone||"";
     coding=p.codes&&typeof p.codes==="object"?{allergy:p.codes.allergy||{},cond:p.codes.cond||{},meds:p.codes.meds||{},hist:p.codes.hist||{}}:{allergy:{},cond:{},meds:{},hist:{}};
+    labs=Array.isArray(p.labs)?p.labs:[];
+    renderLabs();
   }
 
   // ===== QR =====
@@ -165,6 +169,125 @@ import qrcode from "./qr.js";
     const {done,total}=codedCount(); toast(done+" of "+total+" coded");
   };
 
+  // ===== lab reports =====
+  let parsedLabResults=null; // temp: results from latest parse, awaiting save
+
+  $("labToggle").onclick=()=>{
+    $("labToggle").classList.toggle("open");
+    $("labBody").classList.toggle("open");
+  };
+
+  function renderLabs(){
+    const wrap=$("labList");
+    $("labCount").textContent=labs.length;
+    if(!labs.length){wrap.innerHTML='<div class="lab-empty">No lab reports yet. Import one to start tracking.</div>';return;}
+    wrap.innerHTML="";
+    const sorted=[...labs].sort((a,b)=>b.date.localeCompare(a.date));
+    sorted.forEach(report=>{
+      const div=document.createElement("div");div.className="lab-report";
+      const highCount=report.results.filter(r=>r.flag==="high").length;
+      const lowCount=report.results.filter(r=>r.flag==="low").length;
+      const flags=[];
+      if(highCount)flags.push('<span class="lr-flag high">'+highCount+' high</span>');
+      if(lowCount)flags.push('<span class="lr-flag low">'+lowCount+' low</span>');
+      if(!highCount&&!lowCount)flags.push('<span class="lr-flag ok">all normal</span>');
+
+      div.innerHTML='<div class="lab-report-head"><div><span class="lr-date">'+esc(report.date)+'</span> <span class="lr-lab">'+esc(report.lab||"")+'</span></div><div class="lr-flags">'+flags.join("")+'</div></div><div class="lab-report-body" id="lrb-'+esc(report.id)+'"></div>';
+
+      // toggle expand
+      div.querySelector(".lab-report-head").onclick=()=>{
+        const body=div.querySelector(".lab-report-body");
+        body.classList.toggle("open");
+        if(body.classList.contains("open")&&!body.dataset.rendered){
+          body.dataset.rendered="1";
+          renderLabReport(body,report);
+        }
+      };
+      wrap.appendChild(div);
+    });
+  }
+
+  function renderLabReport(container,report){
+    // group results by category
+    const groups={};
+    report.results.forEach(r=>{
+      const cat=r.category||"other";
+      if(!groups[cat])groups[cat]=[];
+      groups[cat].push(r);
+    });
+    const catOrder=["diabetes","lipids","liver","kidney","thyroid","cardiac","inflammation","cbc","vitamins","iron","hormones","allergy","serology","pancreas","arthritis","urine","other"];
+    let html='';
+    catOrder.forEach(cat=>{
+      if(!groups[cat])return;
+      html+='<div class="lr-cat"><div class="lr-cat-h">'+esc(CAT_LABELS[cat]||cat)+'</div>';
+      groups[cat].forEach(r=>{
+        const flagCls=r.flag==="high"?" high":r.flag==="low"?" low":"";
+        const refStr=(r.refLow!=null&&r.refHigh!=null)?r.refLow+"–"+r.refHigh:(r.refHigh!=null?"<"+r.refHigh:(r.refLow!=null?">"+r.refLow:""));
+        html+='<div class="lr-row"><span class="lr-name">'+esc(r.name)+'</span><span class="lr-val'+flagCls+'">'+esc(r.valueText)+'</span><span class="lr-unit">'+esc(r.unit||"")+'</span><span class="lr-ref">'+esc(refStr)+'</span></div>';
+      });
+      html+='</div>';
+    });
+    html+='<div style="margin-top:10px"><button class="mini btn-danger" data-del="'+report.id+'">Delete report</button></div>';
+    container.innerHTML=html;
+    container.querySelector('[data-del]').onclick=()=>{
+      const i=labs.findIndex(l=>l.id===report.id);
+      if(i>-1){labs.splice(i,1);renderLabs();toast("Report deleted");}
+    };
+  }
+
+  // lab import modal
+  $("btnLabImport").onclick=()=>{
+    $("lab-date").value=new Date().toISOString().slice(0,10);
+    $("lab-name").value=""; $("lab-text").value="";
+    $("labPreview").innerHTML=""; $("labErr").textContent="";
+    $("labSaveBtn").disabled=true; parsedLabResults=null;
+    $("labScrim").classList.add("show");
+    $("lab-text").focus();
+  };
+  $("labCancelBtn").onclick=()=>{$("labScrim").classList.remove("show");parsedLabResults=null;};
+
+  $("labParseBtn").onclick=()=>{
+    const text=$("lab-text").value.trim();
+    if(!text){$("labErr").textContent="Paste some report text first.";return;}
+    parsedLabResults=parseLabText(text);
+    if(!parsedLabResults.length){$("labErr").textContent="No test results found. Check the format.";$("labSaveBtn").disabled=true;return;}
+    $("labErr").textContent="";
+    // render preview
+    const highCount=parsedLabResults.filter(r=>r.flag==="high").length;
+    const lowCount=parsedLabResults.filter(r=>r.flag==="low").length;
+    let html='<div class="lip-summary"><span class="lip-chip total">'+parsedLabResults.length+' results parsed</span>';
+    if(highCount)html+='<span class="lip-chip flagged">'+highCount+' high</span>';
+    if(lowCount)html+='<span class="lip-chip flagged">'+lowCount+' low</span>';
+    html+='</div><div class="lab-import-preview">';
+    const groups={};
+    parsedLabResults.forEach(r=>{const c=r.category||"other";if(!groups[c])groups[c]=[];groups[c].push(r);});
+    Object.keys(groups).forEach(cat=>{
+      html+='<div class="lr-cat"><div class="lr-cat-h">'+esc(CAT_LABELS[cat]||cat)+'</div>';
+      groups[cat].forEach(r=>{
+        const flagCls=r.flag==="high"?" high":r.flag==="low"?" low":"";
+        const refStr=(r.refLow!=null&&r.refHigh!=null)?r.refLow+"–"+r.refHigh:(r.refHigh!=null?"<"+r.refHigh:(r.refLow!=null?">"+r.refLow:""));
+        html+='<div class="lr-row"><span class="lr-name">'+esc(r.name)+'</span><span class="lr-val'+flagCls+'">'+esc(r.valueText)+'</span><span class="lr-unit">'+esc(r.unit||"")+'</span><span class="lr-ref">'+esc(refStr)+'</span></div>';
+      });
+      html+='</div>';
+    });
+    html+='</div>';
+    $("labPreview").innerHTML=html;
+    $("labSaveBtn").disabled=false;
+  };
+
+  $("labSaveBtn").onclick=()=>{
+    if(!parsedLabResults||!parsedLabResults.length)return;
+    const report=createLabReport($("lab-date").value,$("lab-name").value.trim(),parsedLabResults,"parsed");
+    labs.push(report);
+    renderLabs();
+    $("labScrim").classList.remove("show");
+    parsedLabResults=null;
+    // auto-expand the collapsible
+    $("labToggle").classList.add("open");
+    $("labBody").classList.add("open");
+    toast(report.results.length+" results saved");
+  };
+
   // ===== render =====
   function render(){
     const p=read(), t=I18N[lang];
@@ -243,7 +366,7 @@ import qrcode from "./qr.js";
     }
     await persist(); renderList(); toast("Saved "+p.name);
   };
-  $("btnNew").onclick=()=>{coding={allergy:{},cond:{},meds:{},hist:{}};write({});render();toast("Cleared");F.name.focus();};
+  $("btnNew").onclick=()=>{coding={allergy:{},cond:{},meds:{},hist:{}};labs=[];write({});render();toast("Cleared");F.name.focus();};
   $("btnPrint").onclick=()=>window.print();
 
   $("btnLock").onclick=()=>{
